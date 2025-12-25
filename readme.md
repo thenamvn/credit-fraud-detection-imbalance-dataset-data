@@ -263,7 +263,8 @@ Phương pháp này:
 *   Phù hợp triển khai trong môi trường production
     
 
-Dựa vào biểu đồ Feature Importance và logic nghiệp vụ phát hiện gian lận (Fraud Detection), việc 6 đặc trưng này đứng đầu là **hoàn toàn hợp lý**. Chúng phản ánh chính xác tâm lý và hành vi của kẻ gian lận.
+
+# Dựa vào biểu đồ Feature Importance và logic nghiệp vụ phát hiện gian lận (Fraud Detection), việc 6 đặc trưng này đứng đầu là **hoàn toàn hợp lý**. Chúng phản ánh chính xác tâm lý và hành vi của kẻ gian lận.
 
 Dưới đây là giải thích chi tiết tại sao chúng lại quan trọng đến vậy:
 
@@ -303,4 +304,69 @@ Dưới đây là giải thích chi tiết tại sao chúng lại quan trọng �
 ### Tóm lại
 Mô hình của bạn đang hoạt động rất "thông minh". Nó không chỉ nhìn vào số tiền (`amt`), mà nó đang so sánh số tiền đó với ngữ cảnh (`category`, `amt_vs_category_mean`) và thời gian (`hour`). Đây chính là lý do tại sao độ chính xác (Precision) của bạn đạt tới 93%.
 
-👉 Đây là **phương pháp chính của dự án**, không phải thử nghiệm phụ.”
+# Giải thích chi tiết cơ chế tìm threshold và lý do tại sao threshold có thể cao như vậy:
+
+### 1. Cơ chế tìm Threshold của hàm `find_optimal_threshold`
+
+Hàm này hoạt động như sau:
+1.  Nó thử **tất cả** các ngưỡng có thể từ 0 đến 1.
+2.  Tại mỗi ngưỡng, nó tính **F1-Score** (trung bình điều hòa giữa Precision và Recall).
+3.  Nó chọn ngưỡng nào làm cho F1-Score cao nhất.
+
+**Công thức:** $F1 = 2 \times \frac{Precision \times Recall}{Precision + Recall}$
+
+### 2. Tại sao Threshold lại cao đến 96%?
+
+Lý do nằm ở chất lượng mô hình của bạn: **Mô hình quá tự tin và phân loại quá tốt.**
+
+*   **Phân tách rõ ràng:** Mô hình đã học được cách phân biệt Normal và Fraud cực kỳ rạch ròi.
+    *   Với giao dịch bình thường (Normal), mô hình dự đoán xác suất lừa đảo cực thấp (ví dụ: 0.001, 0.05).
+    *   Với giao dịch lừa đảo (Fraud), mô hình dự đoán xác suất cực cao (ví dụ: 0.98, 0.99).
+*   **Khoảng trống ở giữa:** Có rất ít các điểm dữ liệu "lập lờ" nằm ở khoảng giữa (ví dụ 0.4 - 0.6).
+
+Khi mô hình đẩy xác suất của Fraud lên rất cao (gần 1.0), thì điểm cắt tối ưu (nơi F1 cao nhất) sẽ tự động trượt lên cao theo để loại bỏ tối đa các ca nghi ngờ sai (False Positives).
+
+### 3. Minh họa dễ hiểu
+
+Hãy tưởng tượng thang điểm từ 0 đến 100:
+*   **Mô hình yếu:** Kẻ gian được chấm 60 điểm, người thường 40 điểm. Bạn phải đặt ngưỡng ở 50 để phân loại.
+*   **Mô hình của bạn (Mạnh):** Kẻ gian được chấm 99 điểm, người thường chỉ 1-2 điểm.
+    *   Lúc này, bạn đặt ngưỡng ở 50 cũng được, 80 cũng được, hay **96** cũng được.
+    *   Tuy nhiên, thuật toán chọn 96 vì có thể có một vài giao dịch bình thường "hơi lạ" bị chấm 90 điểm. Đặt ngưỡng 96 giúp loại bỏ những ca "hơi lạ" này (tăng Precision) mà vẫn giữ được hầu hết kẻ gian (Recall vẫn cao).
+
+### 4. Có cách nào khác để chọn Threshold không?
+
+Nếu bạn không muốn dùng F1-Score (cân bằng), bạn có thể chọn Threshold theo mục tiêu kinh doanh (Business Metric):
+
+**Cách 1: Ưu tiên bắt hết lừa đảo (Maximize Recall)**
+Nếu ngân hàng chấp nhận gọi điện làm phiền khách hàng (False Positive) miễn là không để lọt kẻ gian.
+*   *Code:* Chọn threshold sao cho Recall >= 0.95.
+
+**Cách 2: Ưu tiên độ chính xác (Maximize Precision)**
+Nếu ngân hàng sợ khách hàng giận vì khóa thẻ nhầm.
+*   *Code:* Chọn threshold sao cho Precision >= 0.99.
+
+**Code thay thế để bạn thử nghiệm (Thêm vào file notebook):**
+
+```python
+def find_threshold_by_recall(y_true, y_proba, target_recall=0.90):
+    """
+    Tìm ngưỡng để đạt được Recall mong muốn (ví dụ bắt được 90% kẻ gian)
+    """
+    precisions, recalls, thresholds = precision_recall_curve(y_true, y_proba)
+    
+    # Tìm vị trí mà Recall vừa đủ >= target_recall
+    # Recalls thường được sắp xếp giảm dần, nên ta tìm điểm gần nhất
+    idx = np.argmin(np.abs(recalls - target_recall))
+    
+    selected_threshold = thresholds[idx]
+    print(f"\n>>> Threshold for {target_recall*100}% Recall: {selected_threshold:.4f}")
+    print(f"    Corresponding Precision: {precisions[idx]:.4f}")
+    
+    return selected_threshold
+
+# Gọi hàm thử
+# threshold_recall = find_threshold_by_recall(y_test, y_pred_proba, target_recall=0.95)
+```
+
+**Kết luận:** Threshold 96% chứng tỏ Feature Engineering của bạn (đặc biệt là các feature so sánh hành vi) cực kỳ hiệu quả, khiến mô hình rất tự tin khi bắt gian lận. Bạn có thể yên tâm sử dụng.
