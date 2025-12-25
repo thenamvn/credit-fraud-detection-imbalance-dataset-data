@@ -263,4 +263,44 @@ Phương pháp này:
 *   Phù hợp triển khai trong môi trường production
     
 
+Dựa vào biểu đồ Feature Importance và logic nghiệp vụ phát hiện gian lận (Fraud Detection), việc 6 đặc trưng này đứng đầu là **hoàn toàn hợp lý**. Chúng phản ánh chính xác tâm lý và hành vi của kẻ gian lận.
+
+Dưới đây là giải thích chi tiết tại sao chúng lại quan trọng đến vậy:
+
+### 1. `amt` (Số tiền) & `amt_log` (Log số tiền) - Vị trí Top 1 & 2
+*   **Lý do:** Đây là động cơ chính của gian lận. Kẻ gian thường có 2 xu hướng:
+    *   **Rút cạn hạn mức:** Thực hiện các giao dịch giá trị rất lớn (mua đồ điện tử, trang sức) để tẩu tán tiền nhanh nhất có thể trước khi thẻ bị khóa.
+    *   **Test thẻ:** Thực hiện giao dịch rất nhỏ để xem thẻ còn sống không.
+*   **Tại sao quan trọng:** `amt` là tín hiệu trực tiếp nhất. `amt_log` giúp mô hình xử lý tốt hơn sự chênh lệch quá lớn giữa giao dịch 1$ và 10.000$ (giảm độ lệch - skewness), giúp thuật toán hội tụ nhanh hơn.
+
+### 2. `category` (Loại hình kinh doanh) - Vị trí Top 3
+*   **Lý do:** Gian lận không xảy ra ngẫu nhiên. Kẻ gian thường nhắm vào các loại hình dễ thanh khoản (bán lại lấy tiền mặt) hoặc khó truy vết.
+*   **Ví dụ:**
+    *   **Rủi ro cao:** Mua sắm trực tuyến (online shopping), đồ điện tử, trang sức, thẻ quà tặng.
+    *   **Rủi ro thấp:** Thanh toán tiền điện nước, đi siêu thị mua rau, đổ xăng (tùy ngữ cảnh).
+*   **Tại sao quan trọng:** Mô hình học được rằng "Nếu giao dịch thuộc nhóm `misc_net` hoặc `shopping_net`, xác suất lừa đảo cao hơn hẳn so với `grocery_pos`".
+
+### 3. `category_mean_amt` (Số tiền trung bình của loại hình đó) - Vị trí Top 4
+*   **Lý do:** Đây là **ngữ cảnh (Context)**. Nó cho mô hình biết "bình thường người ta tiêu bao nhiêu ở chỗ này".
+*   **Ví dụ:** Trung bình một lần đi `gas_transport` (đổ xăng) là 50$. Trung bình mua `grocery` (tạp hóa) là 100$.
+*   **Tại sao quan trọng:** Nó làm nền tảng để so sánh cho feature tiếp theo.
+
+### 4. `amt_vs_category_mean` (Tỷ lệ số tiền / Trung bình loại hình) - Vị trí Top 5
+*   **Lý do:** Đây là feature **phát hiện bất thường (Anomaly Detection)** mạnh nhất.
+*   **Ví dụ:**
+    *   Bạn mua cà phê (`food_dining`), trung bình mọi người tiêu 5$.
+    *   Đột nhiên có một giao dịch 500$ tại quán cà phê đó.
+    *   => `amt` (500) / `category_mean` (5) = **100 lần**.
+*   **Tại sao quan trọng:** Con số 500$ nếu mua Tivi thì bình thường, nhưng mua cà phê là lừa đảo. Feature này giúp mô hình hiểu được sự **vô lý** của giao dịch trong ngữ cảnh cụ thể.
+
+### 5. `hour` (Giờ giao dịch) - Vị trí Top 6
+*   **Lý do:** Thói quen sinh hoạt của con người và kẻ gian khác nhau.
+*   **Hành vi:**
+    *   Người thật: Thường ngủ từ 11h đêm đến 6h sáng. Giao dịch chủ yếu giờ hành chính hoặc buổi tối.
+    *   Kẻ gian (hoặc Hacker quốc tế): Thường hoạt động vào khung giờ "chết" (2h - 4h sáng) khi nạn nhân đang ngủ để không nhận được thông báo biến động số dư ngay lập tức, hoặc do lệch múi giờ.
+*   **Tại sao quan trọng:** Một giao dịch mua hàng hiệu lúc 3 giờ sáng là tín hiệu đỏ cực lớn.
+
+### Tóm lại
+Mô hình của bạn đang hoạt động rất "thông minh". Nó không chỉ nhìn vào số tiền (`amt`), mà nó đang so sánh số tiền đó với ngữ cảnh (`category`, `amt_vs_category_mean`) và thời gian (`hour`). Đây chính là lý do tại sao độ chính xác (Precision) của bạn đạt tới 93%.
+
 👉 Đây là **phương pháp chính của dự án**, không phải thử nghiệm phụ.”
