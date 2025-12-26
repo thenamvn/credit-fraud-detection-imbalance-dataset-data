@@ -155,6 +155,19 @@ Các đặc trưng này giúp mô hình học **ngữ cảnh tiêu dùng**, khô
 
 * * *
 
+#### 3.4 Time-based Features (Đặc trưng thời gian)
+
+*   Trích xuất thông tin từ `trans_date_trans_time` trước khi loại bỏ để mô hình dễ học hơn:
+    
+    *   **hour**: Giờ giao dịch (phát hiện giao dịch vào khung giờ lạ, đêm khuya).
+    *   **day_of_week**: Ngày trong tuần (hành vi cuối tuần vs ngày thường).
+    *   **month**: Tháng (xu hướng mùa vụ).
+    *   **age**: Tuổi khách hàng (tính từ `dob` và thời gian giao dịch).
+
+Các đặc trưng này giúp mô hình nắm bắt được **thói quen thời gian** của giao dịch gian lận.
+
+* * *
+
 4\. Tối ưu Threshold (Decision Threshold Optimization)
 ------------------------------------------------------
 
