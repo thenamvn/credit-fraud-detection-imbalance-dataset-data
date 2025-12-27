@@ -1,3 +1,5 @@
 ./*.csv
 fraudTest.csv
 fraudTrain.csv
+archive.zip
+fraud_detection_model.pkl
